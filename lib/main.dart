@@ -3,13 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
+// Mets true pour activer les pubs (apres le test sans pubs).
+const useAds = false;
+
 // IDs de TEST Google. Remplace-les par tes vrais IDs AdMob avant publication.
 const bannerId = 'ca-app-pub-3940256099942544/6300978111';
 const interId = 'ca-app-pub-3940256099942544/1033173712';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await MobileAds.instance.initialize();
+  if (useAds) {
+    try {
+      await MobileAds.instance.initialize();
+    } catch (_) {}
+  }
   runApp(const MaterialApp(debugShowCheckedModeBanner: false, home: Game()));
 }
 
@@ -34,6 +41,7 @@ class _GameState extends State<Game> with SingleTickerProviderStateMixin {
   List<Offset> enemies = [];
   List<Bullet> bullets = [];
   BannerAd? banner;
+  bool bannerLoaded = false;
   InterstitialAd? inter;
   final rnd = Random();
 
@@ -42,13 +50,20 @@ class _GameState extends State<Game> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    banner = BannerAd(
-      adUnitId: bannerId,
-      size: AdSize.banner,
-      request: const AdRequest(),
-      listener: BannerAdListener(onAdLoaded: (_) => setState(() {})),
-    )..load();
-    _loadInter();
+    if (useAds) {
+      try {
+        banner = BannerAd(
+          adUnitId: bannerId,
+          size: AdSize.banner,
+          request: const AdRequest(),
+          listener: BannerAdListener(
+            onAdLoaded: (_) => setState(() => bannerLoaded = true),
+            onAdFailedToLoad: (ad, _) => ad.dispose(),
+          ),
+        )..load();
+        _loadInter();
+      } catch (_) {}
+    }
     _ticker = createTicker(_tick)..start();
   }
 
@@ -105,10 +120,10 @@ class _GameState extends State<Game> with SingleTickerProviderStateMixin {
         b.p.dx < 0 || b.p.dx > sz.width || b.p.dy < 0 || b.p.dy > sz.height);
     if (enemies.isEmpty && bullets.isEmpty && ammo > 0) {
       level++;
-      if (level % 3 == 1) _showInter(); // pub tous les 3 niveaux
+      if (useAds && level % 3 == 1) _showInter();
       _spawn();
     } else if (ammo == 0 && bullets.isEmpty && enemies.isNotEmpty) {
-      _spawn(); // perdu: on recommence le niveau
+      _spawn();
     }
     setState(() {});
   }
@@ -151,7 +166,7 @@ class _GameState extends State<Game> with SingleTickerProviderStateMixin {
                       color: Colors.white,
                       fontSize: 20,
                       fontWeight: FontWeight.bold))),
-          if (banner != null)
+          if (banner != null && bannerLoaded)
             Positioned(
                 bottom: 0,
                 left: (sz.width - 320) / 2,
