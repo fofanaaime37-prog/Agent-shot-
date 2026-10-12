@@ -22,6 +22,7 @@ jobs:
           M=android/app/src/main/AndroidManifest.xml
           sed -i '0,/<application/s//<uses-permission android:name="android.permission.INTERNET"\/>\n    <application/' $M
           sed -i '0,/<activity/s//<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"\/>\n        <activity/' $M
+          sed -i '0,/<activity/s//<meta-data android:name="io.flutter.embedding.android.EnableImpeller" android:value="false"\/>\n        <activity/' $M
           cat $M
       - name: Compiler
         run: |
