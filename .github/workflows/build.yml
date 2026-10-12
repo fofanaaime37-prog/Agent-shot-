@@ -24,11 +24,24 @@ jobs:
           sed -i '0,/<activity/s//<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"\/>\n        <activity/' $M
           sed -i '0,/<activity/s//<meta-data android:name="io.flutter.embedding.android.EnableImpeller" android:value="false"\/>\n        <activity/' $M
           cat $M
-      - name: Compiler
+      - name: Compiler le jeu
         run: |
           cd app
+          flutter build apk --release
+      - name: Compiler la petite appli de test
+        run: |
+          flutter create --project-name hello_test --org com.monnom hello
+          cd hello
+          cat > lib/main.dart << 'EOF'
+          import 'package:flutter/material.dart';
+          void main() => runApp(const MaterialApp(home: Scaffold(backgroundColor: Colors.blue, body: Center(child: Text('Ca marche', style: TextStyle(fontSize: 32, color: Colors.white))))));
+          EOF
           flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
           name: agent-shot-apk
           path: app/build/app/outputs/flutter-apk/app-release.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hello-apk
+          path: hello/build/app/outputs/flutter-apk/app-release.apk
