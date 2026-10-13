@@ -13,20 +13,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - name: Variante a (ancien module de pubs)
-        continue-on-error: true
-        run: |
-          flutter create --project-name agent_shot_a --org com.monnom appa
-          cp lib/main.dart appa/lib/main.dart
-          sed -i 's/const useAds = false;/const useAds = true;/' appa/lib/main.dart
-          cd appa
-          flutter pub add google_mobile_ads:5.3.1
-          M=android/app/src/main/AndroidManifest.xml
-          sed -i '0,/<application/s//<uses-permission android:name="android.permission.INTERNET"\/>\n    <application/' $M
-          sed -i '0,/<activity/s//<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"\/>\n        <activity/' $M
-          flutter build apk --release --no-shrink
-      - name: Variante b (dernier module de pubs)
-        continue-on-error: true
+      - name: Compiler le jeu avec pubs
         run: |
           flutter create --project-name agent_shot_b --org com.monnom appb
           cp lib/main.dart appb/lib/main.dart
@@ -37,10 +24,35 @@ jobs:
           sed -i '0,/<application/s//<uses-permission android:name="android.permission.INTERNET"\/>\n    <application/' $M
           sed -i '0,/<activity/s//<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"\/>\n        <activity/' $M
           flutter build apk --release --no-shrink
-      - uses: actions/upload-artifact@v4
+          grep -A 3 "google_mobile_ads" pubspec.lock | head -5
+      - name: Activer KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Test sur telephone virtuel
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
         with:
-          name: variante-a-apk
-          path: appa/build/app/outputs/flutter-apk/app-release.apk
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          script: |
+            adb install -r appb/build/app/outputs/flutter-apk/app-release.apk
+            adb logcat -c
+            adb shell monkey -p com.monnom.agent_shot_b -c android.intent.category.LAUNCHER 1
+            sleep 25
+            adb logcat -d > full.txt
+      - name: Afficher le crash
+        if: always()
+        run: |
+          grep -n -m1 -A 40 "FATAL EXCEPTION" full.txt || echo "PAS DE PLANTAGE DETECTE"
+          grep -i "agent_shot_b" full.txt | tail -20 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rapport-logs
+          path: full.txt
       - uses: actions/upload-artifact@v4
         with:
           name: variante-b-apk
