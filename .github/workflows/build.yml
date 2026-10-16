@@ -13,75 +13,42 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - name: Preparer les 3 variantes
+      - name: Preparer test et prod
         run: |
-          for V in c d e; do
-            flutter create --project-name agent_shot_$V --org com.monnom app$V
+          for V in test prod; do
+            if [ $V = test ]; then
+              ORG=com.fofana.test
+              APPID=ca-app-pub-3940256099942544~3347511713
+              BAN=ca-app-pub-3940256099942544/6300978111
+              INT=ca-app-pub-3940256099942544/1033173712
+            else
+              ORG=com.fofana
+              APPID=ca-app-pub-6616009706842724~6109957163
+              BAN=ca-app-pub-6616009706842724/2644610014
+              INT=ca-app-pub-6616009706842724/1647967972
+            fi
+            flutter create --project-name agentshot --org $ORG app$V
             cp lib/main.dart app$V/lib/main.dart
             sed -i 's/const useAds = false;/const useAds = true;/' app$V/lib/main.dart
+            sed -i "s#ca-app-pub-3940256099942544/6300978111#$BAN#; s#ca-app-pub-3940256099942544/1033173712#$INT#" app$V/lib/main.dart
             (cd app$V && flutter pub add google_mobile_ads)
             M=app$V/android/app/src/main/AndroidManifest.xml
             sed -i '0,/<application/s//<uses-permission android:name="android.permission.INTERNET"\/>\n    <application/' $M
-            sed -i '0,/<activity/s//<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"\/>\n        <activity/' $M
-          done
-          for V in c e; do
-            M=app$V/android/app/src/main/AndroidManifest.xml
-            sed -i 's#<manifest #<manifest xmlns:tools="http://schemas.android.com/tools" #' $M
-            sed -i 's#</application>#<provider android:name="androidx.startup.InitializationProvider" android:authorities="${applicationId}.androidx-startup" android:exported="false" tools:node="merge"><meta-data android:name="androidx.work.WorkManagerInitializer" android:value="androidx.startup" tools:node="remove"/></provider>\n    </application>#' $M
-          done
-          for V in d e; do
+            sed -i "0,/<activity/s//<meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"$APPID\"\/>\n        <activity/" $M
             G=app$V/android/app/build.gradle.kts
             sed -i 's#signingConfig = signingConfigs.getByName("debug")#signingConfig = signingConfigs.getByName("debug")\n            isMinifyEnabled = false\n            isShrinkResources = false#' $G
-            sed -i 's#signingConfig = signingConfigs.debug#signingConfig = signingConfigs.debug\n            minifyEnabled false\n            shrinkResources false#' app$V/android/app/build.gradle 2>/dev/null || true
-            grep -n -B3 -A6 -i "minifyEnabled" $G || echo "GRADLE NON MODIFIE POUR $V"
+            grep -n -B2 -A4 "isMinifyEnabled" $G || echo "GRADLE NON MODIFIE POUR $V"
           done
-      - name: Compiler c, d, e
+      - name: Compiler
         run: |
-          for V in c d e; do
+          for V in test prod; do
             (cd app$V && flutter build apk --release)
           done
-      - name: Activer KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Creer le script de test
-        run: |
-          cat > test.sh << 'EOF'
-          for V in c d e; do
-            adb install -r app$V/build/app/outputs/flutter-apk/app-release.apk
-            adb logcat -c
-            adb shell monkey -p com.monnom.agent_shot_$V -c android.intent.category.LAUNCHER 1
-            sleep 20
-            if adb shell pidof com.monnom.agent_shot_$V > /dev/null; then echo "RESULTAT $V : OK (appli vivante)" | tee -a results.txt; else echo "RESULTAT $V : PLANTAGE" | tee -a results.txt; fi
-            adb logcat -d > log_$V.txt
-          done
-          EOF
-      - name: Test sur telephone virtuel
-        continue-on-error: true
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          target: google_apis
-          arch: x86_64
-          script: bash test.sh
-      - name: Resultats
-        if: always()
-        run: |
-          cat results.txt || echo "PAS DE RESULTATS"
-          for V in c d e; do
-            echo "----- erreur $V -----"
-            grep -m1 -A 6 "FATAL EXCEPTION" log_$V.txt || echo "aucune erreur fatale pour $V"
-          done
       - uses: actions/upload-artifact@v4
         with:
-          name: variante-c-apk
-          path: appc/build/app/outputs/flutter-apk/app-release.apk
+          name: apk-test
+          path: apptest/build/app/outputs/flutter-apk/app-release.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: variante-d-apk
-          path: appd/build/app/outputs/flutter-apk/app-release.apk
-      - uses: actions/upload-artifact@v4
-        with:
-          name: variante-e-apk
-          path: appe/build/app/outputs/flutter-apk/app-release.apk
+          name: apk-prod
+          path: appprod/build/app/outputs/flutter-apk/app-release.apk
