@@ -28,7 +28,7 @@ jobs:
               INT=ca-app-pub-6616009706842724/1647967972
             fi
             flutter create --project-name agentshot --org $ORG app$V
-            cp lib/main.dart app$V/lib/main.dart
+            cp -r lib/. app$V/lib/
             sed -i 's/const useAds = false;/const useAds = true;/' app$V/lib/main.dart
             sed -i "s#ca-app-pub-3940256099942544/6300978111#$BAN#; s#ca-app-pub-3940256099942544/1033173712#$INT#" app$V/lib/main.dart
             (cd app$V && flutter pub add google_mobile_ads)
