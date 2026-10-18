@@ -309,3 +309,17 @@ class _ShopState extends State<Shop> {
                 );
               },
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+// FIN
+// FIN
+// FIN
+// FIN
+// FIN
+// FIN
+// FIN
+// FIN
