@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +9,8 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 part 'ui.dart';
 part 'game.dart';
+part 'paint.dart';
+part 'sfx.dart';
 
 // Mets true pour activer les pubs (la compilation le fait automatiquement).
 const useAds = false;
@@ -14,11 +18,13 @@ const useAds = false;
 // IDs de TEST Google (remplaces automatiquement dans la version finale).
 const bannerId = 'ca-app-pub-3940256099942544/6300978111';
 const interId = 'ca-app-pub-3940256099942544/1033173712';
+const rewardId = 'ca-app-pub-3940256099942544/5224354917';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await Save.load();
+  Sfx.init();
   if (useAds) {
     try {
       await MobileAds.instance.initialize();
@@ -30,6 +36,7 @@ void main() async {
 // ---------- Sauvegarde ----------
 class Save {
   static int coins = 0, best = 1, skin = 0;
+  static bool sound = true;
   static List<int> owned = [0];
   static File? _f;
 
@@ -42,13 +49,14 @@ class Save {
         best = int.parse(p[1]);
         skin = int.parse(p[2]);
         owned = p[3].split('|').map(int.parse).toList();
+        if (p.length > 4) sound = p[4] == '1';
       }
     } catch (_) {}
   }
 
   static void save() {
     try {
-      _f?.writeAsStringSync('$coins,$best,$skin,${owned.join('|')}');
+      _f?.writeAsStringSync('$coins,$best,$skin,${owned.join('|')},${sound ? 1 : 0}');
     } catch (_) {}
   }
 }
