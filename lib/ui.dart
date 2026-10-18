@@ -12,6 +12,7 @@ class _RootState extends State<Root> {
   BannerAd? banner;
   bool bannerOk = false;
   InterstitialAd? inter;
+  RewardedAd? rewarded;
 
   @override
   void initState() {
@@ -30,6 +31,7 @@ class _RootState extends State<Root> {
           ),
         )..load();
         _loadInter();
+        _loadRewarded();
       } catch (_) {}
     }
   }
@@ -40,6 +42,17 @@ class _RootState extends State<Root> {
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (a) => inter = a,
+        onAdFailedToLoad: (_) {},
+      ),
+    );
+  }
+
+  void _loadRewarded() {
+    RewardedAd.load(
+      adUnitId: rewardId,
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (a) => rewarded = a,
         onAdFailedToLoad: (_) {},
       ),
     );
@@ -59,10 +72,29 @@ class _RootState extends State<Root> {
     inter = null;
   }
 
+  void _watch(VoidCallback grant) {
+    final a = rewarded;
+    if (a == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pub indisponible, réessaie dans un instant.')));
+      _loadRewarded();
+      return;
+    }
+    a.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (ad) {
+        ad.dispose();
+        _loadRewarded();
+      },
+    );
+    rewarded = null;
+    a.show(onUserEarnedReward: (ad, reward) => grant());
+  }
+
   @override
   void dispose() {
     banner?.dispose();
     inter?.dispose();
+    rewarded?.dispose();
     super.dispose();
   }
 
@@ -73,9 +105,10 @@ class _RootState extends State<Root> {
       body = Game(
           key: ValueKey(gameKey),
           onExit: () => setState(() => screen = 0),
-          onLevelDone: _levelDone);
+          onLevelDone: _levelDone,
+          onWatch: _watch);
     } else if (screen == 2) {
-      body = Shop(onBack: () => setState(() => screen = 0));
+      body = Shop(onBack: () => setState(() => screen = 0), onWatch: _watch);
     } else {
       body = Menu(
           onPlay: () => setState(() {
@@ -101,10 +134,14 @@ class _RootState extends State<Root> {
 }
 
 // ---------- Menu ----------
-class Menu extends StatelessWidget {
+class Menu extends StatefulWidget {
   final VoidCallback onPlay, onShop;
   const Menu({super.key, required this.onPlay, required this.onShop});
+  @override
+  State<Menu> createState() => _MenuState();
+}
 
+class _MenuState extends State<Menu> {
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -114,33 +151,56 @@ class Menu extends StatelessWidget {
             end: Alignment.bottomCenter,
             colors: [Color(0xFF0288D1), Color(0xFF4FC3F7), Color(0xFFFFE0B2)]),
       ),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('AGENT SHOT',
-                style: TextStyle(
-                    color: Colors.white, fontSize: 40, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 6),
-            Text('Niveau max : ${Save.best}   |   Pièces : ${Save.coins}',
-                style: const TextStyle(color: Colors.white, fontSize: 16)),
-            SizedBox(
-                width: 140,
-                height: 190,
-                child: CustomPaint(painter: _AP(skins[Save.skin], 1.6, 60))),
-            ElevatedButton(
-                onPressed: onPlay,
-                style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 14)),
-                child: const Text('JOUER', style: TextStyle(fontSize: 22))),
-            const SizedBox(height: 12),
-            ElevatedButton(
-                onPressed: onShop,
-                style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 10)),
-                child: const Text('BOUTIQUE', style: TextStyle(fontSize: 18))),
-          ],
-        ),
+      child: Stack(
+        children: [
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('AGENT SHOT',
+                    style: TextStyle(
+                        color: Colors.white, fontSize: 40, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 6),
+                Text('Niveau max : ${Save.best}   |   Pièces : ${Save.coins}',
+                    style: const TextStyle(color: Colors.white, fontSize: 16)),
+                SizedBox(
+                    width: 140,
+                    height: 190,
+                    child: CustomPaint(painter: _AP(skins[Save.skin], 1.6, 60))),
+                ElevatedButton(
+                    onPressed: () {
+                      Sfx.play('click');
+                      widget.onPlay();
+                    },
+                    style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 14)),
+                    child: const Text('JOUER', style: TextStyle(fontSize: 22))),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                    onPressed: () {
+                      Sfx.play('click');
+                      widget.onShop();
+                    },
+                    style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 10)),
+                    child: const Text('BOUTIQUE', style: TextStyle(fontSize: 18))),
+              ],
+            ),
+          ),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: IconButton(
+              icon: Icon(Save.sound ? Icons.volume_up : Icons.volume_off,
+                  color: Colors.white, size: 30),
+              onPressed: () {
+                setState(() => Save.sound = !Save.sound);
+                Save.save();
+                Sfx.play('click');
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -149,7 +209,8 @@ class Menu extends StatelessWidget {
 // ---------- Boutique ----------
 class Shop extends StatefulWidget {
   final VoidCallback onBack;
-  const Shop({super.key, required this.onBack});
+  final void Function(VoidCallback grant) onWatch;
+  const Shop({super.key, required this.onBack, required this.onWatch});
   @override
   State<Shop> createState() => _ShopState();
 }
@@ -178,6 +239,20 @@ class _ShopState extends State<Shop> {
               ],
             ),
           ),
+          if (useAds)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.play_circle_fill),
+                label: const Text('Gagner 25 pièces (pub vidéo)'),
+                onPressed: () => widget.onWatch(() {
+                  if (!mounted) return;
+                  setState(() => Save.coins += 25);
+                  Save.save();
+                  Sfx.play('coin');
+                }),
+              ),
+            ),
           Expanded(
             child: ListView.builder(
               itemCount: skins.length,
@@ -194,6 +269,7 @@ class _ShopState extends State<Shop> {
                       onPressed: () {
                         setState(() => Save.skin = i);
                         Save.save();
+                        Sfx.play('click');
                       },
                       child: const Text('Choisir'));
                 } else {
@@ -206,6 +282,7 @@ class _ShopState extends State<Shop> {
                                 Save.skin = i;
                               });
                               Save.save();
+                              Sfx.play('coin');
                             }
                           : null,
                       child: Text('Acheter ${s.price}'));
@@ -232,9 +309,3 @@ class _ShopState extends State<Shop> {
                 );
               },
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
