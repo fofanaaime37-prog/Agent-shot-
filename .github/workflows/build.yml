@@ -27,7 +27,7 @@ jobs:
               APPID=ca-app-pub-6616009706842724~6109957163
               BAN=ca-app-pub-6616009706842724/2644610014
               INT=ca-app-pub-6616009706842724/1647967972
-              REW=ca-app-pub-3940256099942544/5224354917
+              REW=ca-app-pub-6616009706842724/5864422885
             fi
             flutter create --project-name agentshot --org $ORG app$V
             cp -r lib/. app$V/lib/
